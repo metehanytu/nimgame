@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nim Oyunu</title>
+    <style>
+        :root{
+            --bg:#eaf4d3; --panel:#ffffff; --accent:#7c3aed; --accent-2:#22c55e;
+            --text:#1f2937; --muted:#94a3b8; --danger:#ef4444;
+            --shadow: 0 10px 30px rgba(15,23,42,.12); --radius:18px;
+        }
+        *{box-sizing:border-box}
+        body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+            background:linear-gradient(180deg, var(--bg), #f7fde9); color:var(--text);
+            min-height:100dvh; display:grid; place-items:center; padding:24px;}
+        .app{ width:min(100%, 980px); background:var(--panel); border-radius:var(--radius);
+            box-shadow:var(--shadow); padding:18px 18px 8px; position:relative;}
+        header{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 6px 16px; border-bottom:1px dashed #e5e7eb;}
+        header h1{font-size:20px; margin:0; letter-spacing:.2px}
+        .controls{display:flex; gap:8px; flex-wrap:wrap}
+        button{appearance:none; border:0; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer;
+            background:#f3f4f6; color:#111827; transition:transform .05s ease, box-shadow .2s ease, background .2s; box-shadow:0 2px 0 rgba(0,0,0,.06)}
+        button:hover{background:#eef2ff} button:active{transform:translateY(1px)}
+        .primary{background:linear-gradient(180deg,#8b5cf6,#7c3aed); color:#fff; box-shadow:0 6px 20px rgba(124,58,237,.35)}
+        .content{display:grid; grid-template-columns: 1fr 320px; gap:18px; padding-top:14px}
+        @media (max-width: 880px){ .content{grid-template-columns: 1fr} }
+        .board{background:linear-gradient(180deg,#e8f7c4,#d7f2a2); border-radius:16px; padding:28px; display:grid; place-items:center; min-height:420px; position:relative; overflow:hidden;}
+        .rows{display:grid; gap:18px; width:min(680px,100%)} .row{display:grid; grid-auto-flow:column; justify-content:center; align-items:end; gap:12px; min-height:54px}
+        .stick{width:14px; height:74px; border-radius:8px; position:relative; background:linear-gradient(180deg,#ffedd5,#fde68a);
+            box-shadow:inset 0 -10px 12px rgba(0,0,0,.06), 0 3px 8px rgba(0,0,0,.08)}
+        .stick::before{content:""; position:absolute; top:-8px; left:50%; transform:translateX(-50%); width:18px; height:18px; background:radial-gradient(circle at 50% 30%, #a78bfa 0 55%, #6d28d9 56% 100%); border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,.2)}
+        .sidebar{background:#fafafa; border:1px solid #eee; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px}
+        .sidebar h2{margin:4px 2px 8px; font-size:15px; font-weight:700; color:#111827}
+        .grid-rows{display:grid; gap:8px}
+        .row-btn{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:12px; background:#fff; border:1px solid #ececec}
+        .row-btn small{color:var(--muted)} .row-btn button{padding:8px 10px}
+        .status{margin-top:8px; background:#fff; border:1px dashed #e5e7eb; border-radius:12px; padding:12px; font-size:14px}
+        .toast{position:absolute; right:14px; bottom:14px; background:#111827; color:#fff; padding:10px 12px; border-radius:10px; opacity:0; transform:translateY(10px); transition:.25s ease}
+        .toast.show{opacity:1; transform:none}
+        .think-panel{display:none} .think-panel.open{display:block}
+    </style>
+</head>
+<body>
+<div class="app" id="app">
+    <header>
+        <h1>Nim – Basit Ortam</h1>
+        <div class="controls">
+            <button class="primary" id="newGameBtn">Yeni Oyun</button>
+            <button id="pcMoveBtn">PC move</button>
+            <button id="toggleExplainBtn">Düşünmeyi Göster</button>
+        </div>
+    </header>
+
+    <section class="content">
+        <div class="board">
+            <div class="rows" id="rows"></div>
+            <div class="toast" id="toast"></div>
+        </div>
+        <aside class="sidebar">
+            <h2>Satırlar</h2>
+            <div class="grid-rows" id="rowButtons"></div>
+            <div class="status" id="status"></div>
+            <div class="status think-panel" id="thinkPanel" style="max-height:220px; overflow:auto">
+                <b>PC Düşüncesi</b>
+                <div id="thinkLog" style="margin-top:6px; white-space:pre-wrap; font-family: 'Lucida Console', 'Courier New', monospace;"></div>
+            </div>
+        </aside>
+    </section>
+</div>
+</body>
+<script>
+    const DEFAULT_STATE = [1,3,5,7];
+    const state = { rows: [...DEFAULT_STATE], turn: 'human', finished:false , activeRow: -1};
+
+    const $rows = document.getElementById('rows');
+    const $rowButtons = document.getElementById('rowButtons');
+    const $status = document.getElementById('status');
+    const $toast = document.getElementById('toast');
+    const $thinkPanel = document.getElementById('thinkPanel');
+    const $thinkLog = document.getElementById('thinkLog');
+    const $toggleExplainBtn = document.getElementById('toggleExplainBtn');
+    let explainEnabled = false;
+
+    function renderBoard(){
+        $rows.innerHTML = '';
+        state.rows.forEach((count) => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            for(let i=0;i<count;i++){
+                const s = document.createElement('div'); s.className = 'stick'; row.appendChild(s);
+            }
+            $rows.appendChild(row);
+        });
+
+        $rowButtons.innerHTML = '';
+        state.rows.forEach((count, idx) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'row-btn';
+            wrap.innerHTML = `<div><b>Row ${idx+1}</b> <small>(${count})</small></div>`;
+            const btn = document.createElement('button');
+            btn.textContent = '-1 al';
+            btn.disabled = state.finished || state.turn!=='human' || count===0;
+            btn.addEventListener('click', () => onHumanTake(idx, 1));
+            wrap.appendChild(btn);
+            $rowButtons.appendChild(wrap);
+        });
+
+        updateStatus();
+    }
+
+    function updateStatus(){
+        const total = state.rows.reduce((a,b)=>a+b,0);
+        let txt = `<div>Toplam kibrit: <b>${total}</b></div>`;
+        if (total===0){
+            state.finished = true;
+            txt += `<div style="margin-top:6px">Oyun bitti. Son kibriti aldığın için kaybettin.</div>`;
+            showToast(txt);
+        }
+        $status.innerHTML = txt;
+        document.getElementById('pcMoveBtn').disabled = state.finished || state.activeRow === -1;
+    }
+
+    function onHumanTake(rowIdx, amount){
+        if(state.finished) return;
+        if(state.rows[rowIdx] <= 0) return;
+        if (state.activeRow > -1 && rowIdx !== state.activeRow) return;
+        state.activeRow = rowIdx;
+        const take = Math.min(amount, state.rows[rowIdx]);
+        state.rows[rowIdx] -= take;
+
+        document.querySelectorAll(".row-btn button").forEach(elem => elem.disabled = true);
+        document.querySelectorAll(".row-btn button")[state.activeRow].disabled = false;
+        renderBoard();
+    }
+
+    document.getElementById('pcMoveBtn').addEventListener('click', ()=>{
+        if(state.finished || state.turn!=='human') return;
+        const move = computePcMove([...state.rows]);
+        if(!move) return;
+        const r = move.row|0;
+        const t = Math.max(1, Math.min(move.take|0, state.rows[r]||0));
+        state.rows[r] -= t;
+        state.activeRow = -1;
+        if (explainEnabled && move.explain) logExplain(move.explain);
+        renderBoard();
+    });
+
+    function showToast(message){
+        $toast.innerHTML = message;
+        $toast.classList.add('show');
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(()=> $toast.classList.remove('show'), 4200);
+    }
+
+    document.getElementById('newGameBtn').addEventListener('click', ()=>{
+        state.rows = [...DEFAULT_STATE];
+        state.turn = 'human';
+        state.finished = false;
+        state.activeRow = -1;
+        $thinkLog.textContent = '';
+        renderBoard();
+    });
+
+    $toggleExplainBtn.addEventListener('click', ()=>{
+        explainEnabled = !explainEnabled;
+        $toggleExplainBtn.textContent = explainEnabled ? 'Düşünmeyi Gizle' : 'Düşünmeyi Göster';
+        $thinkPanel.classList.toggle('open', explainEnabled);
+    });
+
+    function logExplain(msg){
+        const time = new Date().toLocaleTimeString();
+        $thinkLog.innerHTML += `\n[${time}] ${msg}`;
+        $thinkPanel.scrollTop = $thinkPanel.scrollHeight;
+    }
+
+    function computePcMove(rows){
+        let numberOfRowsBiggerThanOne = 0;
+        for (let i = 0; i < rows.length; i++) if (rows[i] > 1) numberOfRowsBiggerThanOne++;
+
+        const bin = n => (n>>>0).toString(2);
+
+        if (numberOfRowsBiggerThanOne > 1) {
+            // normal Nim kısmı
+            let xor = rows.reduce((a,b)=>a^b,0);
+            for (let i = 0; i < rows.length; i++) {
+                let target = rows[i] ^ xor;
+                if (target < rows[i]) {
+                    const take = rows[i] - target;
+                    const hiBit = 1 << (31 - Math.clz32(xor));
+                    const msg =
+                        `Durum: ${rows.join(', ')} <br>
+XOR = ${xor} (bin ${bin(xor)}). <br>
+En yüksek 1-bit ${hiBit}. <br>
+${i+1}. satırdaki ${rows[i]} değeri için hedef = ${rows[i]} XOR ${xor} = ${target}.<br>
+Bu yüzden ${i+1}. satırdan ${take} aldım: ${rows[i]} → ${target} (nim-toplam 0).`;
+                    return { row: i, take, explain: msg };
+                }
+            }
+
+        } else if (numberOfRowsBiggerThanOne === 1) {
+            // misère özel: tek büyük yığın
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i] > 1) {
+                    let sumOfRows = rows.reduce((a, b) => a + b, 0);
+                    let take = sumOfRows % 2 === 0 ? rows[i] - 1 : rows[i];
+                    const ones = rows.filter(x=>x===1).length;
+                    let target = rows[i] - take;
+                    const msg =
+                        `Durum: ${rows.join(', ')} <br>
+Tek büyük yığın Row ${i+1} = ${rows[i]},<br>
+1'lerin sayısı = ${ones}.
+Toplam ${sumOfRows} ${sumOfRows%2===0?'çift':'tek'} olduğu için ${i+1}. satırı ${target} değerine indirdim (−${take}).
+Amaç: rakibe tüm 0/1 ve TEK sayıda 1 bırakmak.`;
+                    return { row: i, take: take , explain: msg};
+                }
+            }
+        } else {
+            // hepsi 0/1
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i] === 1) {
+                    const ones = rows.filter(x=>x===1).length;
+                    const msg =
+                        `Durum: ${rows.join(', ')}
+Tüm yığınlar 0/1. 1 sayısı = ${ones}. Bir 1 alarak pariteyi ${ones-1} yapıyorum.`;
+                    return { row: i, take: 1, explain: msg };
+                }
+            }
+        }
+    }
+
+    renderBoard();
+</script>
+
+</html>
