@@ -181,7 +181,6 @@
         const bin = n => (n>>>0).toString(2);
 
         if (numberOfRowsBiggerThanOne > 1) {
-            // normal Nim kısmı
             let xor = rows.reduce((a,b)=>a^b,0);
             for (let i = 0; i < rows.length; i++) {
                 let target = rows[i] ^ xor;
@@ -199,12 +198,11 @@ Bu yüzden ${i+1}. satırdan ${take} aldım: ${rows[i]} → ${target} (nim-topla
             }
 
         } else if (numberOfRowsBiggerThanOne === 1) {
-            // misère özel: tek büyük yığın
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i] > 1) {
                     let sumOfRows = rows.reduce((a, b) => a + b, 0);
-                    let take = sumOfRows % 2 === 1 ? rows[i] - 1 : rows[i];
                     const ones = rows.filter(x=>x===1).length;
+                    let take = ones % 2 === 0 ? rows[i] - 1 : rows[i];
                     let target = rows[i] - take;
                     const msg =
                         `Durum: ${rows.join(', ')} <br>
@@ -216,7 +214,6 @@ Amaç: rakibe tüm 0/1 ve TEK sayıda 1 bırakmak.`;
                 }
             }
         } else {
-            // hepsi 0/1
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i] === 1) {
                     const ones = rows.filter(x=>x===1).length;
