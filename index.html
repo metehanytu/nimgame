@@ -203,7 +203,7 @@ Bu yüzden ${i+1}. satırdan ${take} aldım: ${rows[i]} → ${target} (nim-topla
             for (let i = 0; i < rows.length; i++) {
                 if (rows[i] > 1) {
                     let sumOfRows = rows.reduce((a, b) => a + b, 0);
-                    let take = sumOfRows % 2 === 0 ? rows[i] - 1 : rows[i];
+                    let take = sumOfRows % 2 === 1 ? rows[i] - 1 : rows[i];
                     const ones = rows.filter(x=>x===1).length;
                     let target = rows[i] - take;
                     const msg =
